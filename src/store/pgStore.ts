@@ -1,4 +1,6 @@
 import { Pool } from "pg";
+import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
+import WebSocket from "ws";
 import type { Store } from "./store";
 import type { LanDevice, PcRecord, PcSummary, SessionRecord, UserRecord } from "../types/device";
 
@@ -62,18 +64,45 @@ const toPc = (r: PcRow): PcRecord & { id: string } => ({
   lanDevices: r.lan_devices ?? [],
 });
 
+/**
+ * Neon databases are reached through Neon's WebSocket driver (port 443, the
+ * normal HTTPS port) instead of PostgreSQL's port 5432, which many home ISPs,
+ * mobile networks and office firewalls block — that shows up as
+ * "Connection terminated due to connection timeout". Any other PostgreSQL
+ * uses the standard `pg` driver. Force a choice with DB_DRIVER=pg|neon.
+ */
+function useNeonDriver(connectionString: string): boolean {
+  const forced = process.env.DB_DRIVER?.toLowerCase();
+  if (forced === "pg") return false;
+  if (forced === "neon") return true;
+  try {
+    return new URL(connectionString).hostname.endsWith(".neon.tech");
+  } catch {
+    return false;
+  }
+}
+
 /** PostgreSQL store (e.g. Neon). Used whenever DATABASE_URL is set. */
 export class PgStore implements Store {
   private readonly pool: Pool;
   private cleanupTimer: NodeJS.Timeout | null = null;
 
   constructor(connectionString: string) {
-    this.pool = new Pool({
+    const options = {
       connectionString,
       max: 5,
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 10_000,
-    });
+      // Neon may need a few seconds to wake a sleeping database.
+      connectionTimeoutMillis: 15_000,
+    };
+    if (useNeonDriver(connectionString)) {
+      neonConfig.webSocketConstructor = WebSocket;
+      // Same query API as pg's Pool, just a different transport.
+      this.pool = new NeonPool(options) as unknown as Pool;
+      console.log("[db] connecting to Neon over WebSocket (port 443)");
+    } else {
+      this.pool = new Pool(options);
+    }
     // An idle client losing its connection (e.g. Neon scaling to zero) must
     // not crash the process; the pool simply opens a new one next time.
     this.pool.on("error", (err) => console.warn("[db] idle client error:", err.message));
