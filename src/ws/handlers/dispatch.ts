@@ -10,7 +10,7 @@ import { handlePing } from "./ping";
  * Adding a new message type means: add it to the zod union in
  * src/types/messages.ts, write a handler, add one line here.
  */
-export function dispatch(ctx: HandlerContext, msg: ClientMessage): void {
+export async function dispatch(ctx: HandlerContext, msg: ClientMessage): Promise<void> {
   switch (msg.type) {
     case "report_lan_devices":
       return handleReportLanDevices(ctx, msg);

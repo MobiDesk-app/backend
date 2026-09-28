@@ -1,6 +1,16 @@
-// MVP auth: one shared secret checked against every connecting client.
-// Fine for "just me"; move to per-device issued tokens before that changes.
-// See README "Not done yet" for the upgrade path.
-export function isValidToken(token: string, expected: string): boolean {
-  return token.length > 0 && token === expected;
+import { hashSecret, safeEqual } from "./secrets";
+
+/**
+ * Tokens handed to clients look like "<recordId>.<secret>": the id finds the
+ * record directly, then the secret is checked against its stored hash in
+ * constant time.
+ */
+export function splitToken(token: string): { id: string; secret: string } | null {
+  const dot = token.indexOf(".");
+  if (dot <= 0 || dot === token.length - 1) return null;
+  return { id: token.slice(0, dot), secret: token.slice(dot + 1) };
+}
+
+export function secretMatches(secret: string, storedHash: string): boolean {
+  return safeEqual(hashSecret(secret), storedHash);
 }

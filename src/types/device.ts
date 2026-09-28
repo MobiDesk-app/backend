@@ -6,13 +6,37 @@ export interface LanDevice {
   name?: string;
 }
 
-export interface PcRecord {
+export interface UserRecord {
+  id: string;
+  email: string;
+  passwordHash: string;
+  createdAt: string;
+}
+
+export interface SessionRecord {
+  id: string;
+  userId: string;
+  secretHash: string;
   name: string;
-  lastSeen: string; // ISO timestamp
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+}
+
+export interface PcRecord {
+  ownerId: string;
+  secretHash: string;
+  name: string;
+  createdAt: string;
+  lastSeen: string;
   lanDevices: LanDevice[];
 }
 
-export interface PcSummary extends PcRecord {
+/** What clients see — never includes owner or secret hashes. */
+export interface PcSummary {
   id: string;
+  name: string;
+  lastSeen: string;
+  lanDevices: LanDevice[];
   online: boolean;
 }

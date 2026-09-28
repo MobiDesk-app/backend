@@ -3,3 +3,5 @@ dist/
 .env
 data/*.json
 !data/.gitkeep
+data/store.json
+data/*.tmp

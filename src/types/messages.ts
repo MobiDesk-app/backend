@@ -18,13 +18,22 @@ const lanDeviceSchema = z
   })
   .transform(({ name, ...rest }) => (name === undefined ? rest : { ...rest, name }));
 
-export const authMessageSchema = z.object({
-  type: z.literal("auth"),
-  token: z.string(),
-  deviceId: z.string().min(1),
-  role: z.enum(["pc", "app"]),
-  name: z.string().optional(),
-});
+// PC agents authenticate with the device id + secret they received when
+// they were linked; apps authenticate with a sign-in session token.
+export const authMessageSchema = z.discriminatedUnion("role", [
+  z.object({
+    type: z.literal("auth"),
+    role: z.literal("pc"),
+    deviceId: z.string().min(1).max(100),
+    secret: z.string().min(1).max(200),
+    name: z.string().max(64).optional(),
+  }),
+  z.object({
+    type: z.literal("auth"),
+    role: z.literal("app"),
+    sessionToken: z.string().min(1).max(300),
+  }),
+]);
 
 export const reportLanDevicesMessageSchema = z.object({
   type: z.literal("report_lan_devices"),

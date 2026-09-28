@@ -68,8 +68,9 @@ Ran the compiled server and `scripts/smoke-test.ts` together and confirmed:
 
 ```bash
 npm install
-cp .env.example .env   # then edit AUTH_TOKEN to a real random string
+cp .env.example .env   # defaults work for local dev
 npm run dev            # runs src/server.ts directly, restarts on change
+npm run e2e-test       # (server running) checks accounts, linking, routing and attack cases
 ```
 
 Health check: `GET http://localhost:8080/health`
@@ -127,3 +128,39 @@ npm run smoke-test
   platform that terminates TLS for you before exposing it publicly)
 - The PC agent (Electron) and the React Native app itself — this server has
   nothing to talk to yet
+
+## Accounts and PC linking
+
+There is no shared token any more. Instead:
+
+- **People sign in with email + password** (web or phone app). Passwords are
+  hashed with scrypt; each sign-in gets its own random session token
+  (`POST /api/auth/login`), stored hashed, revocable with
+  `POST /api/auth/logout`, and valid for 60 days after last use.
+- **PCs are linked with a 6-digit code.** The agent calls
+  `POST /api/pairing/start` and shows the code; the signed-in user enters it
+  (`POST /api/pairing/claim`); the agent's `POST /api/pairing/poll` then
+  receives a permanent device id + 256-bit secret. Codes last 10 minutes and
+  are single-use.
+- **Routing is per account.** The WebSocket relay only passes signals
+  between a PC and apps signed in to the account that owns it, and the
+  device list only shows your own PCs. `DELETE /api/pcs/:id` unlinks a PC
+  and disconnects it.
+- **Rate limits:** 8 wrong passwords per email / 30 per IP per 15 minutes,
+  5 wrong link codes per user / 20 per IP per 15 minutes.
+
+## Database
+
+Set `DATABASE_URL` (PostgreSQL, e.g. Neon) and the server stores everything
+there — tables `users`, `sessions` and `pcs` are created automatically on
+startup (`src/store/pgStore.ts`). Without it, it falls back to a local JSON
+file (`DATA_FILE`, default `data/store.json`) for quick local testing.
+Passwords and secrets are only ever stored as hashes.
+
+To copy accounts from an old JSON file into Postgres (safe to run twice):
+```bash
+npm run import-json
+```
+
+Link codes and login rate limits are kept in memory, so run a single
+instance of the server (fine for this app's scale).
